@@ -67,7 +67,7 @@ The kernel groups the data inside the task_struct into logical categories. Here 
   * It stores the 
     * User ID (UID) 
     * Group ID (GID).
-    * Kernal verify this then only allow file opening.
+    * Kernel verify this then only allow file opening.
         ```rust
         // The target security badge structure
         struct Cred {
