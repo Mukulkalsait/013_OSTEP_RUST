@@ -188,7 +188,7 @@ Now that the physical registers and the TSS / Banked Register mechanisms are cle
 3. Hardware Layout Diagram
 
 This diagram maps out how components are split between the physical CPU package, a Performance Core, and its two independent Hyper-Threads, showing exactly what is private vs. shared.
-text
+```text
  ┌─────────────────────────────────────────────────────────────────────────────────┐
  │               INTEL CORE i5-13500HX PROCESSOR (DIE / PACKAGE)                   │
  │                                                                                 │
@@ -206,7 +206,7 @@ text
  │  │   │ SHARED L2 CACHE (1.25 MB per P-core)                              │   │  │
  │  │   └───────────────────────────────────────────────────────────────────┘   │  │
  │  │   ┌───────────────────────────────────────────────────────────────────┐   │  │
- │  │   │ EXECUTION ENGINE (ALUs, FPUs, Vector Units - Executing Instructions)   │   │  │
+ │  │   │ EXECUTION ENG(ALUs,FPUs,VectorUnits -Executing Instructions)      │   │  │
  │  │   └───────────────────────────────────────────────────────────────────┘   │  │
  │  │                                                                           │  │
  │  │   ┌───────────────────────────────┐   ┌───────────────────────────────┐   │  │
@@ -239,7 +239,7 @@ text
  │  └─────────────────────────────────────┘ └────────────────────────────────────┘ │
  └─────────────────────────────────────────────────────────────────────────────────┘
 Use code with caution.
-
+```
 Components Decoded for OSTEP:
 
 1. The Registers (RIP, RSP, CS): These dictate the absolute local state of execution. When an OS performs a Context Switch (a major topic in OSTEP Chapter 4/5), it saves these registers from the CPU into a process structure and loads a new process's values into them.
