@@ -90,22 +90,29 @@ if TRAP::SYS_CALL{
     | TSS | [ONLY] changing privilege Ring 0 or 3, (1,2)rare| |
     | IST | can be forced into action even when CPU = Ring 0 | | 
 
+
 ##### IST : OS can add : High Priority Interrupts [Total Sys falure Prevention.] 
-  - OS configure =>high-priority interrupts 
-  - use [IST] stack to prevent total system failure. The most famous use cases include:
-• Double Fault Handler (#DF): If the kernel runs out of regular stack space and crashes, it triggers a Double Fault. If it tried to handle this using the regular stack, it would crash instantly again (a Triple Fault, causing a hardware reboot). By switching to a clean IST stack, the OS can safely report the error.
-• Non-Maskable Interrupts (NMI): Critical hardware failure alerts that must be processed on a guaranteed, clean stack.
-• Machine Check Exceptions (#MC): Severe hardware errors (like ECC memory corruption).
+  - OS config => high-priority interrupts 
+  - use [IST] stack ***Prevention** total system failure* :
+  - Famous use cases:
+    1. Double Fault Handler (#DF): 
+       - If the kernel runs out of regular stack space and crashes, 
+       - it triggers a Double Fault. 
+       - If it tried to handle this using the regular stack, 
+       - it would crash instantly again 
+       - (a Triple Fault, causing a hardware reboot).
+     + By switching to a clean IST stack, the OS can safely report the error.
+    2. Non-Maskable Interrupts (NMI): 
+     + Critical hardware failure alerts that must be processed on a guaranteed, clean stack.
+    3. Machine Check Exceptions (#MC): 
+     + Severe hardware errors (like ECC memory corruption).
 
-Summary Comparison Table
+| RSP0|TSS|Privilege elevation Ring 3->0|Standard SysCall, Page Faults, regular HW interrupts|
+| - | - | - | -  |
+|Stack Pointer| Where It's Located|  Trigger Condition|Common Real-World Use|
+|RSP1 / RSP2|TSS|Privilege elevation to Ring 1 / Ring 2|Unused by modern OSes|
+| IST1 – IST7|TSS-IST)| BluePrint=[IDT](Interrupt Descriptor Table) |Emergency handlers (Double Faults, NMI, Kernel Debugging) |
 
-
-Stack Pointer	Where It's Located	Trigger Condition	Common Real-World Use
-RSP0	TSS	Privilege elevation to Ring 0	Standard System Calls, Page Faults, regular hardware interrupts
-RSP1 / RSP2	TSS	Privilege elevation to Ring 1 / Ring 2	Unused by modern OSes
-IST1 – IST7	TSS (Interrupt Stack Table)	Tied to specific entries in the IDT (Interrupt Descriptor Table)	Emergency handlers (Double Faults, NMI, Kernel Debugging)
-
-Would you like to look at how an operating system assigns an IST stack to a specific severe error like a Double Fault inside the Interrupt Descriptor Table (IDT)?
 
 ------------------------------
 ## 2. What is the "Chip/Memory Boundary"?
