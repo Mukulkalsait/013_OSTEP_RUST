@@ -9,7 +9,7 @@
     - Program Stack (Os Crash/Corruption) ⛔ (NO)
     - Kernel Stack 🟩 (OK)
 
- * HENCE: 
+> NOT A REAL CODE.
 ```rust (RUST STYLE)
 /// Previliged Checking.
 fn Previliged_work(...){
