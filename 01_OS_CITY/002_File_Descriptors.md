@@ -121,8 +121,8 @@ While the index number (the FD) lives in the same table, the kernel knows that t
 =================================================================================================================================================================================================
 wait so fds are stored per process 
 where a fd index starting from 0 is just a number for that process, 
-but underling for kernal it has really deep meaning because its storing the actual path of that fd, 
-so whre exactly kernal storing all this fd ?
+but underling for kernel it has really deep meaning because its storing the actual path of that fd, 
+so whre exactly kernel storing all this fd ?
 from your previous info you told me about process descriptors which are there in pcb process controll block , which stores 4 main thigns, 
   open file table, cpu registors, current state, and memory limit. all this is critical execution informaiton of process. 
 i thought it should be there but i also thigks all the fds should be on one place so may be they are  somewhere else...
@@ -196,7 +196,7 @@ You have incredible intuition. You are exactly right about how it splits between
       - epoll someting which can mointor all fd in the plot,
       - and timerfd which can provide stopwatch like coundown alerts, into plot.
   - while buliding this mental modle i connect them to the other shore of the city
-  - where is a huge fortress with massive security is builld (kernal space)
+  - where is a huge fortress with massive security is builld (kernel space)
   - the fd shelf is directly connectied to the phisical building inside the fortress at the starting fo the fortress,
   - known as PCB PROCESS CONTROL BLOCK 
     * insid there i sa massive area in the building 
@@ -207,7 +207,7 @@ You have incredible intuition. You are exactly right about how it splits between
         - inside file struct the same infomation 
         - as the main shelve is stored in paper, 
         - and it directly connected to the anotehr building 
-        - inside the fortress much deeper inside an area of kernal memory space,
+        - inside the fortress much deeper inside an area of kernel memory space,
         - known as STRUCT file which contain 
             * f_pos and f_flags 
             * just you exlained, and 
@@ -325,7 +325,7 @@ if its true how exactly you explain this thigns,
   use adb to move a file from my phone
   and disconnect, 
   the dentry and inode, 
-wait i get it we change it from the the phones kernal memory space 
+wait i get it we change it from the the phones kernel memory space 
 not the pcs, 
 ok if we connect a pendrive
 and move a file from one place to other
