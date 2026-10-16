@@ -1,7 +1,7 @@
 ## 1. What is a "Trap" in the Simplest Way Possible?
 
   - A-> User Program in USER MODE => Sandboxed, Powerless, NO-HW access.
-  - User program has Trigger -> Emergency Button [🆘 SYS-CALL].
+  - User program has Trigger -> Emergency Liver [🆘 SYS-CALL].
   - The movement SYS_CALL Triggered ->
    1. CPU freez => user program.
    2. CPU hardware flips [Privilege Ring (x86_64) | CPSR ->Exception Levels (ARM64)]  => **UserMode => KernelMode**
@@ -34,5 +34,5 @@
     - IF CPU gets [Previliged Instruction] (like modifying memory tables or halting the CPU),
     - CPU CHECKS -> [CPL / EL] 
     - If bits -> "User Mode" (Ring 3/EL0),
-        - ⛔ CPU hardware PHYSICAL-BLOCKS -> instruction & EXECUTION.
-        - ⛔  throws an EXCEPTION.
+       - ⛔ CPU hardware PHYSICAL-BLOCKS -> instruction & EXECUTION.
+       - ⛔  throws an EXCEPTION.
