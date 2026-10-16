@@ -1,8 +1,8 @@
 
 # SUMMARY: LIST
 ---
-## REF: [TrapCall](./501_TrapCall.md)
-## REF: [Kernal Stack Pointer](./502_KernalStackPointer.md)
+## REF: [TrapCall, Swapping](./501_ConCepts-CPU.md)
+## REF: [Kernal Stack + CPU Stracture](./502_K_Stack_n_CPU_Stracture.md)
 
   - >SYS-Call == Trap => Toggle to (UserMode 🔁 Kernel Mode)
   - Trap - Emergency Liver [🆘 SYS-CALL] -> Adder_Space Freez -> Privileged 🔼 Jump. (Kernal)
@@ -32,72 +32,81 @@
     + Wiring change => No softwear COPY Move needed.
     + HW physically Track everyting.
 
+[***You asked: Doesn't x86_64 have RSP0, RSP1, RSP2, and RSP3 just like ARM64 has SP_EL0 and SP_EL1?
+The critical difference is where they physically exist:
+• On x86_64: The processor only contains one physical RSP register inside the silicon chip. The names RSP0, RSP1, and RSP2 are just text labels inside a text document (the TSS structure) sitting out in your RAM sticks. The CPU does not have a transistor cluster named RSP0. It must read RAM to figure out what number to overwrite RSP with.
+• On ARM64: The processor actually builds multiple distinct stack pointer registers into the silicon chip. SP_EL0 is a physical set of transistors, and SP_EL1 is a completely separate physical set of transistors right next to it.***]
+
+
+```text 
+            |-> SP_EL0(Physical Storage) : User Stack 👨 
+            |
+SP WIRES -> |🔘 (Electronic Swich ) / Multiplexer Controlled by CPSR mode
+            |
+            |-> SP_EL1(Physical Storage) : Kernal Stack 🔱  
+```
+
+
 ###### [TSS] is ❌ NOT ==HARDWARE REGISTER== inside the CPU chip 
 ###### Its an [array of bytes] created by the ==OS Kernel== and stored in [RAM]. 
 ###### Physical CPU [core] only contains a tiny register -> [TR (Task Register)]
 ###### [TR] holds => ==OS writes== [pointer pointing to TSS struct in RAM] ON [TR]
 ### Hence: [TR] can be anything => [RSP]-0,1,2,3 or [ISP]-0to7
 
-```rust (RUST STYLE)
-/// Previliged Checking.
-fn Previliged_work(...)->Resualt<()>{
-  if Privileged_Instruction {
-    if CPL_or_EL(Ring 0 || EL1){ // G: KERNEL Mode
-      OK()
-    }else{ 
-      CPU::hardware_block || process::no_execution ;
-      eprintln("Exception");
+```rust
+/// --- 1. PRIVILEGE ENFORCEMENT ENGINE (Pure Hardware Gates) ---
+fn hardware_privilege_check(instruction: Instruction, current_cpl_or_el: u8) -> Result<(), CpuFault> {
+    if instruction.is_privileged() { // G: Privileged Instruction
+        if current_cpl_or_el == 3 || current_cpl_or_el == 0 { // R: User MODE
+            trigger_hardware_fault(FaultType::GeneralProtectionFault); // Apps dies instantly
+            return Err(CpuFault::AccessDenied);
+        }
     }
-  } 
+    Ok(()) // Execution allowed if Ring 0 or EL1
 }
 
-enum Mode{
-  User
-  Kernel
+/// --- 2. THE TRANSITION: HOW x86_64 DOES IT (RAM-driven) ---
+fn x86_64_hardware_trap_handler() {
+    // A. Read active Task Register (TR) to find out where the TSS is in RAM
+    let tss_ram_address = CPU_REGISTERS::TR.read_address();
+    
+    // B. Fetch the safe Kernel Stack Pointer (RSP0) out of RAM from that TSS structure
+    let safe_kernel_stack = RAM::read_memory_64(tss_ram_address + RSP0_OFFSET);
+    
+    // C. Save the caller's old state onto the clean kernel stack before overwriting them
+    let old_user_rsp = CPU_REGISTERS::RSP;
+    let old_user_rip = CPU_REGISTERS::RIP;
+    let old_user_cs  = CPU_REGISTERS::CS; // Contains CPL = 3
+    
+    // D. Update registers to Ring 0 state
+    CPU_REGISTERS::RSP = safe_kernel_stack;
+    CPU_REGISTERS::CS.set_lowest_2_bits(0); // Hardware switches CPL to Ring 0!
+    
+    // E. Push old values onto the new kernel stack so we can return later
+    push_to_stack(old_user_cs);
+    push_to_stack(old_user_rsp);
+    push_to_stack(old_user_rip);
+    
+    // F. Jump to Kernel Entry Point code
+    CPU_REGISTERS::RIP = KERNEL::ENTRY_POINT; 
 }
 
-fn swithc_active_stack_pointer(target:Mode)->Resualt<()>{
-  match target{
-    Kernel => {
-      ACTIVE_STACK_PTR = CPU::Csr::Read::CPL::Ring_0.as_ref();
-      ACTIVE_STACK_PTR = CPU_HW::Cpsr::Write::EL::EL_1.as_ref();
-    },
-    User =>{
-      ACTIVE_STACK_PTR = CPU::Csr::Read::CPL::Ring_3.as_ref();
-      ACTIVE_STACK_PTR = CPU_HW::Cpsr::Write::EL::EL_0.as_ref();
-    }
-  }
+// --- 3. THE TRANSITION: HOW ARM64 DOES IT (Wire/Transistor-driven) ---
+fn arm64_hardware_trap_handler() {
+    // A. Transistor switch flips Current Exception Level inside the CPSR register
+    CPU_REGISTERS::CPSR::EL = 1; // Elevated to EL1 (Kernel)
+    
+    // B. NO RAM READ. The internal selector multiplexer disconnects the 'SP' line 
+    //    from the EL0 transistor bank and maps it to the EL1 transistor bank.
+    //    SP now magically reflects SP_EL1 without moving a single byte of data.
+    
+    // C. Save old User Program Counter (RIP equivalent) into a dedicated hardware register
+    CPU_REGISTERS::ELR_EL1 = CPU_REGISTERS::PC; // Exception Link Register
+    
+    // D. Jump directly to vector table
+    CPU_REGISTERS::PC = KERNEL::VECTOR_TABLE_EL1;
 }
-
-fn TRAP::SYS_CALL{
-  CPU_HW::Csr::Write::CPL::Ring_0; 
-  CPU_HW::Cpsr::Write::EL::EL_1;
-
-  swithc_active_stack_pointer(Kernel);
-}
-
-fn TRAP::SYS_RET{
-  CPU_HW::Csr::Write::CPL::Ring_3; // x86_64 CPL upgrade
-  CPU_HW::Cpsr::Write::EL::EL_0; // ARM64 EL upgarde
-
-  swithc_active_stack_pointer(User);
-}
-
-fn sys_call_fork(){
-
-  todo() // Define registors
-  TRAP::SYS_CALL;
-
-  todo(
-    ...
-    let x = Previliged_work();
-    ...
-  ) // copying of process logic
-
-  TRAP::SYS_RET;
-}
-
-/// NOT A REAL CODE
+// NOT A REAL CODE:  JUST IMAGINATION/ Understanding
 ```
 
  - TABLE:
@@ -152,7 +161,8 @@ fn sys_call_fork(){
 |Stack Pointer| Where It's Located|  Trigger Condition|Common Real-World Use|
 |RSP1 / RSP2|TSS|Privilege elevation to Ring 1 / Ring 2|Unused by modern OSes|
 | IST1 – IST7|TSS-IST)| BluePrint=[IDT](Interrupt Descriptor Table) |Emergency handlers (Double Faults, NMI, Kernel Debugging) |
-  > - [ALL 7 ISTS]: Usage:
+  > [ALL 7 ISTS]: Usage:
+  > This 7 are [isolated, dedicated blocks of RAM] stored Untouched for Catastrophic Fallback of OS CRS (Current Running Stack).
   ```text 
   🔴 IST1:(NMI Stack) -> Non Maksable Intrupts Safety -> Points Emergency Stack -> Used at Catastrophic HW Events.
   ⚫ IST2:(Double Fault Stack:to Stop Tripple Crash) -> if 
@@ -162,6 +172,7 @@ fn sys_call_fork(){
   🔵 IST5:(MCE Safe Recovery Stack) -> NEW Kernals: Specific MEM-Errors Safe Recovery.
   🟣 IST6 & IST7 => RESERVED FOR FUTURE extensions. 
   ```
+
 ##### [TR] Task Register: INCREDIBLY FAST  (Transistor.) -> 64bit data/per.
 ##### At Trap -> CPU read -> TR Values: 
   - Example: 
@@ -175,10 +186,10 @@ fn sys_call_fork(){
 #### SO for Operating System "Logical Core" => 1 CPU. Starting from 0 to N
   + 20 Logical Core => 20 Threads => 20 CPU => to OS.
   + ==Each Thread -> OWN private Set of **TR**==
-    - RIP [Reg Instruction Pointer] ==Program Counter== => Addr of Very Next Machine Code.
-    - RSP [Reg Stack Pointer] => (Top of Current App / Kernel Stack) -> in RAM.
-    - CS [Code Segment] => Tracks [CPR] at lowest 2 bites
-    - TR [Taks Reg] => Point to TSS (Process OR Kernel) in RAM.
+    - ⏭️ RIP [Reg Instruction Pointer] ==Program Counter== => Addr of Very Next Machine Code.
+    - 🎯 RSP [Reg Stack Pointer] => (Top of Current App / Kernel Stack) -> in RAM.
+    - 👑  CS [Code Segment] => Tracks [CPR] at lowest 2 bites
+    - 🖥️  TR [Taks Reg] => Point to TSS (Process OR Kernel) in RAM.
 
   + **ALL ABOVE ARE SEPERATE FOR 1 LOGICAL CPU**
     
@@ -213,7 +224,161 @@ fn sys_call_fork(){
     | 6 P cores | [4X2 Cluster] of E-Core|
     | Seperate L2/P-core ==1.25mb== | Seperate L2/Cluster ==2-4mb== |
 
-  + 
+    ```text
+    ┌─────────────────────────────────────────────────────────────────────────────────┐
+    │               INTEL CORE i5-13500HX PROCESSOR (DIE / PACKAGE)                   │
+    │        ┌──────────────────────────────────────────────────────────┐             │
+    │        │ UNCORE / SYSTEM AGENT (PCIe 5.0, Memory Controller)      │             │
+    │        └──────────────────────────────────────────────────────────┘             │
+    │       ┌─────────────────────────────────────────────────────────────┐           │
+    │       │ SHARED L3 CACHE (24 MB Smart Cache - Shared by all 20 cores)│           │
+    │       └─────────────────────────────────────────────────────────────┘           │
+    │  ┌───────────────────────────────────────────────────────────────────────────┐  │
+    │  │               PHYSICAL PERFORMANCE CORE (P-CORE)                          │  │
+    │  │                                                                           │  │
+    │  │   ┌───────────────────────────────────────────────────────────────────┐   │  │
+    │  │   │ SHARED L2 CACHE (1.25 MB per P-core)                              │   │  │
+    │  │   └───────────────────────────────────────────────────────────────────┘   │  │
+    │  │   ┌───────────────────────────────────────────────────────────────────┐   │  │
+    │  │   │ EXECUTION ENG(ALUs,FPUs,VectorUnits -Executing Instructions)      │   │  │
+    │  │   └───────────────────────────────────────────────────────────────────┘   │  │
+    │  │   ┌───────────────────────────────┐   ┌───────────────────────────────┐   │  │
+    │  │   │ LOGICAL THREAD 0 (CPU 0)      │   │ LOGICAL THREAD 1 (CPU 1)      │   │  │
+    │  │   │                               │   │                               │   │  │
+    │  │   │ ┌───────────────────────────┐ │   │ ┌───────────────────────────┐ │   │  │
+    │  │   │ │ PRIVATE L1 CACHE          │ │   │ │ PRIVATE L1 CACHE          │ │   │  │
+    │  │   │ │ (32KB Inst / 48KB Data)   │ │   │ │ (32KB Inst / 48KB Data)   │ │   │  │
+    │  │   │ └───────────────────────────┘ │   │ └───────────────────────────┘ │   │  │
+    │  │   │ ┌───────────────────────────┐ │   │ ┌───────────────────────────┐ │   │  │
+    │  │   │ │ REGISTERS (State)         │ │   │ │ REGISTERS (State)         │ │   │  │
+    │  │   │ │  • RIP  (Instr Pointer)   │ │   │ │  • RIP  (Instr Pointer)   │ │   │  │
+    │  │   │ │  • RSP  (Current Stack)   │ │   │ │  • RSP  (Current Stack)   │ │   │  │
+    │  │   │ │  • CS   (Holds CPL bits)  │ │   │ │  • CS   (Holds CPL bits)  │ │   │  │
+    │  │   │ │  • TR   (Task Register)   │ │   │ │  • TR   (Task Register)   │ │   │  │
+    │  │   │ └──────────────┬────────────┘ │   │ └──────────────┬────────────┘ │   │  │
+    │  │   └────────────────┼──────────────┘   └────────────────┼──────────────┘   │  │
+    │  └────────────────────┼───────────────────────────────────┼──────────────────┘  │
+    └───────────────────────┼───────────────────────────────────┼─────────────────────┘
+                        (Points to)                         (Points to)
+                            ▼                                   ▼
+    ┌─────────────────────────────────────────────────────────────────────────────────┐
+    │                        MAIN SYSTEM MEMORY (RAM)                                 │
+    │  ┌─────────────────────────────────────┐ ┌────────────────────────────────────┐ │
+    │  │ TSS FOR THREAD 0                    │ │ TSS FOR THREAD 1                   │ │
+    │  │  • RSP0 -> [Thread 0 Kernel Stack]  │ │  • RSP0 -> [Thread 1 Kernel Stack] │ │
+    │  │  • IST1 -> [Thread 0 NMI Stack]     │ │  • IST1 -> [Thread 1 NMI Stack]    │ │
+    │  └─────────────────────────────────────┘ └────────────────────────────────────┘ │
+    └─────────────────────────────────────────────────────────────────────────────────┘
+    Use code with caution.
+    ```
+
+
+## ARM64: 
+ - 
+ -
+  
+```text
+ ┌─────────────────────────────────────────────────────────────────────────────────┐
+ │                       ARM64 CORTEX-X (Mac M) CORE DIE                           │
+ │                                                                                 │
+ │  ┌───────────────────────────────────────────────────────────────────────────┐  │
+ │  │ CORE EXECUTION PIPELINE (Decoders, ALUs, NEON/SVE Vector Math Units)      │  │
+ │  └───────────────────────────────────────────────────────────────────────────┘  │
+ │  ┌───────────────────────────────────────────────────────────────────────────┐  │
+ │  │ L1 CACHE (Isolated Instruction & Data caches per core)                    │  │
+ │  └───────────────────────────────────────────────────────────────────────────┘  │
+ │  ┌───────────────────────────────────────────────────────────────────────────┐  │
+ │  │ ARCHITECTURAL REGISTERS (The actual physical silicon storage state)       │  │
+ │  │                                                                           │  │
+ │  │  • PC   (Program Counter - Equivalent to x86 RIP)                         │  │
+ │  │  • CPSR (Current Program Status Register - Holds active EL0/EL1 state)    │  │
+ │  │                                                                           │  │
+ │  │  ┌─────────────────────────────────────────────────────────────────────┐  │  │
+ │  │  │ BANKED STACK POINTERS (Physically distinct transistor sets)         │  │  │
+ │  │  │                                                                     │  │  │
+ │  │  │  • SP_EL0  ───► [ Transistor Bank A: Active when CPSR Mode = EL0 ]  │  │  │
+ │  │  │  • SP_EL1  ───► [ Transistor Bank B: Active when CPSR Mode = EL1 ]  │  │  │
+ │  │  │  • SP_EL2  ───► [ Transistor Bank C: Active when CPSR Mode = EL2 ]  │  │  │
+ │  │  └─────────────────────────────────────────────────────────────────────┘  │  │
+ │  │                                                                           │  │
+ │  │  ┌─────────────────────────────────────────────────────────────────────┐  │  │
+ │  │  │ EXCEPTION LINK REGISTERS (Holds return addresses without RAM Push)  │  │  │
+ │  │  │                                                                     │  │  │
+ │  │  │  • ELR_EL1 ───► Stores old PC value when trapping from EL0 -> EL1   │  │  │
+ │  │  └─────────────────────────────────────────────────────────────────────┘  │  │
+ │  └───────────────────────────────────────────────────────────────────────────┘  │
+ └──────────────────────────────────────┬──────────────────────────────────────────┘
+                                        │ (Bus Interface)
+ ┌─────────────────────────────────────────────────────────────────────────────────┐
+ │                            MAIN SYSTEM MEMORY (RAM)                             │
+ │                                                                                 │
+ │  ┌──────────────────────────────────┐     ┌──────────────────────────────────┐  │
+ │  │ User Application Stack Space     │     │ Kernel Mode Stack Space          │  │
+ │  │ (Tracked by address inside)      │     │ (Tracked by address inside)      │  │
+ │  │ [           SP_EL0             ] │     │ [           SP_EL1             ] │  │
+ │  └──────────────────────────────────┘     └──────────────────────────────────┘  │
+ └─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+
+
+## IDTR: Interrupt Des-criptor Table Reg => [SysCall Handler Fn Addr table] 
+
+> IDTR Holds -> Phisical Memory Addr of -> (TRAP TABLE/Interrupt-Vector Table)
+```rust 
+if TRAP::SUCCESS {
+  todo(...) /// above given details.
+   IDTR.as_ref().iter().match(|call| call.execute());
+} // just imaginary code.
+``` 
+  | CPU | Trap Instruction |  
+  | --- | --- |
+  | x86_64 | SYS-CAll |
+  | ARM64 | SVC | 
+
+> Workflow: 
+>> x86_64: 
+  + SysCall => Current RSP (3) => TTS
+    - RSP0 -> Set RSP->3 [CPL Flip]
+    - Check [IDTR]:Interrupt Descriptor Table [Registor]=> search CallHandler
+    - EntryPoint -> 🛟 work -> exit.
+  - Returning
+    - Sys-Ret => Current RSP (1) => TTS 
+    - RSP3 -> Set RSP->0 [CPL Flip]
+>> ARM64: 
+  + SysCall => CPSR-CurrentProgramStateReg 
+    - SP_EL0 Flip SP_EL1 
+    - Auto HW Wiring Flipping.
+  + EntryPoint -> 🛟 work -> exit.
+  - Sys-Ret => CPSR -> SP_EL [FLIP].
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

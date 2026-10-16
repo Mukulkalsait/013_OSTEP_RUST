@@ -1,3 +1,5 @@
+
+--- 
 ## 1. What is a "Trap" in the Simplest Way Possible?
 
   - A-> User Program in USER MODE => Sandboxed, Powerless, NO-HW access.
@@ -36,3 +38,22 @@
     - If bits -> "User Mode" (Ring 3/EL0),
        - ⛔ CPU hardware PHYSICAL-BLOCKS -> instruction & EXECUTION.
        - ⛔  throws an EXCEPTION.
+
+--- 
+
+## What "Swapping" Actually Means:
+
+  * It is an instantaneous hardware swap of a 64-bit address 
+  * inside the physical CPU register.
+  
+  * Imagine the CPU has a hidden internal storage pocket 
+  * containing a number (e.g., 0x9000 - the secure Kernel Stack address). 
+  * The active stack register currently holds 0x1000 (the User Stack address).
+  * The moment a trap occurs, 
+    * the CPU hardware instantly drops 0x1000 into a temporary holding slot 
+    * forces 0x9000 into the active stack register. 
+    * Now, when the kernel executes instructions, 
+    * it is safely writing to 0x9000 in secure RAM. 
+    * When the kernel is done, 
+    * the CPU hardware swaps the user's original 0x1000 back into the register, 
+    * and the user program resumes without ever knowing its stack pointer was temporarily changed.
