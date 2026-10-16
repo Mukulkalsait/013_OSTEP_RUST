@@ -1,9 +1,9 @@
 
-## 2. The [Kernel Stack Pointer] (KSP)
+## 2. The [Kernel Stack Pointer] (KSP) ✅
 
 #### KERNAL STACK POINTER:
-  * Process => [stack in memory] ->  tracked by a [Stack Pointer register] ([SPR] in x86, [SP] in ARM)
-  * RSP /SP are Phisical Reg in CPU => 64 bit memory addr only.
+  * Process => [stack in memory] ->  tracked by a [Register Stack Pointer]([RSP] in x86, [SP] in ARM)
+  * R[SP]:(x86)/SP:(ARM) are Phisical Reg in CPU => 64 bit memory addr only.
   * <u>WHILE: CPU maintained [separate Stack Pointer] specifically for Kernel Mode.<u> ==> Kernel Stack Pointer.
   * When [TRAP::]SYS_CALL->
     - Program Stack (Os Crash/Corruption) ⛔ (NO)
@@ -12,7 +12,7 @@
 > NOT A REAL CODE.
 ```rust (RUST STYLE)
 /// Previliged Checking.
-fn Previliged_work(...){
+fn Previliged_work(...)->Resualt<()>{
   if Privileged_Instruction {
     if CPL_or_EL(Ring 0 || EL1){ // G: KERNEL Mode
       OK()
@@ -23,27 +23,64 @@ fn Previliged_work(...){
   } 
 }
 
-/// TRAP Mechanism..
-if TRAP::SYS_CALL{
-  CPU_HW::Csr::Write::CPL::Ring_0; // x86_64 CPL upgrade
-  CPU_HW::Cpsr::Write::EL::EL_1 // ARM64 EL upgarde
+enum Mode{
+  User
+  Kernel
+}
 
-  Active_Stack_Ptr::Switch {
-    User_Stack => Kernel Stack;
+fn swithc_active_stack_pointer(target:Mode)->Resualt<()>{
+  match target{
+    Kernel => {
+      ACTIVE_STACK_PTR = CPU::Csr::Read::CPL::Ring_0.as_ref();
+      ACTIVE_STACK_PTR = CPU_HW::Cpsr::Write::EL::EL_1.as_ref();
+    },
+    User =>{
+      ACTIVE_STACK_PTR = CPU::Csr::Read::CPL::Ring_3.as_ref();
+      ACTIVE_STACK_PTR = CPU_HW::Cpsr::Write::EL::EL_0.as_ref();
+    }
   }
-  program::Previliged_work(...)
-} 
+}
+
+fn TRAP::SYS_CALL{
+  CPU_HW::Csr::Write::CPL::Ring_0; 
+  CPU_HW::Cpsr::Write::EL::EL_1;
+
+  swithc_active_stack_pointer(Kernel);
+}
+
+fn TRAP::SYS_RET{
+  CPU_HW::Csr::Write::CPL::Ring_3; // x86_64 CPL upgrade
+  CPU_HW::Cpsr::Write::EL::EL_0; // ARM64 EL upgarde
+
+  swithc_active_stack_pointer(User);
+}
+
+fn sys_call_fork(){
+
+  todo() // Define registors
+  TRAP::SYS_CALL;
+
+  todo(
+    ...
+    let x = Previliged_work();
+    ...
+  ) // copying of process logic
+
+  TRAP::SYS_RET;
+}
+
 /// NOT A REAL CODE
 ```
 
+  | CPU | UserProgram Stack Loc Traker |  Kernel Stack Loc Tracker |  REG names|
+  | --- | --- | --- | --- |
+  | x86_64 | RSP(Registor Stack Poing) | [TSS] Task State Segment|==RSP3==,(⛔NoUse:**RSP1/2**),[RSP0]| 
+  | ARM64 | SP (Stack Pointer) |  [SP_EL0/SP_EL1] | ? |
+  | _  | _  | _ | _ |
+  | OS | KSP (Kernal Stack Pointer) | SECURE Space in RAM | ? |
 
-| CPU | UserProgram Stack Loc Traker |  Kernel Stack Loc Tracker |  extra |
-| --- | --- | --- | --- |
-| x86_64 | RSP(Registor Stack Poing) | [TSS] Task State Segment| ? |
-| ARM64 | SP (Stack Pointer) |  [SP_EL0/SP_EL1] | ? |
 
-
-## [OLD] x86_64: Task State Segment (TSS) : [HYBRID ENTITY]
+## [OLD] x86_64: Task State Segment (TSS) : [HYBRID ENTITY] ✅
 #### modern x86_64 processors:
   > CPU dedicated hardware structure => TSS () =>[HYBRID ENTITY] Intel/AMD's architecture
   >> CPU hardware has layouts BLUE_PRINT. 
@@ -77,7 +114,7 @@ if TRAP::SYS_CALL{
       * The Connection: kernel > phy-mem-addr of block in RAM ==> the CPU's internal Task Register (TR).
     ```
 
-## [New] x86-64: IST Stacks (IST1 through IST7)
+## [New] x86-64: IST Stacks (IST1 through IST7) ✅
 
   - In 64-bit mode
   - x86-64 introduced a powerful upgrade
@@ -115,7 +152,7 @@ if TRAP::SYS_CALL{
 
 
 ------------------------------
-## 2. What is the "Chip/Memory Boundary"?
+## 2. What is the "Chip/Memory Boundary"? ✅ 
  "chip/memory boundary" =>  CPU silicon end -> wires leading out to your external RAM sticks begin.
 
 
@@ -157,16 +194,20 @@ if TRAP::SYS_CALL{
       - straight into the main physical 
       - RSP register, instantly switching your stack.
 
-## In ARM64: Banked Stack Pointers (SP_EL0 and SP_EL1)
-ARM64 handles this in a cleaner, more modern hardware fashion by using banked registers. ARM64 physically builds multiple distinct Stack Pointer registers right into the silicon.
+## In ARM64: Banked Stack Pointers (SP_EL0 and SP_EL1) ✅ 
+  - ARM64 Much cleaner using [banked registers] 
+  - ARM64 physically [builds] multiple distinct Stack Pointer registers right into the [silicon].
+    * SP_EL0:  stack pointer register reserved for Exception Level 0 (User Mode).
+    * SP_EL1: The physical stack pointer register reserved for Exception Level 1 (Kernel Mode).
 
-* SP_EL0: The physical stack pointer register reserved for Exception Level 0 (User Mode).
-* SP_EL1: The physical stack pointer register reserved for Exception Level 1 (Kernel Mode).
-
-How the Switch Happens in ARM64:
-When running a user program, the CPU uses SP_EL0 to track the user stack. The moment a trap (an exception) triggers and the CPU elevates to Exception Level 1 (Kernel Mode), the internal wiring of the CPU automatically disconnects SP_EL0 and hooks up the physical SP_EL1 register instead. The software doesn't have to copy or move anything; the processor hardware physically changes which transistor track it is reading from.
-Now that the physical registers and the TSS / Banked Register mechanisms are clear, would you like to explore what exactly happens to the user's registers (like RAX, RBX, etc.) right after this stack switch occurs?
-
+##### Switch Machanism:
+  - UserProgram => SP_EL0 to track the USER STACK.
+  - TRAP triggers -> CPU elevates to Exception Level 1 (Kernel Mode)
+  - CPU [INTERNAL WIRING] auto 
+     + disconnects SP_EL0  
+     + hooks SP_EL1 register 
+       - NO COPY or MOVE anything ⛔  
+       - HW physically changes which transistor track it is reading from.
 
 ## [TR] TASK REG(Stack Registers) [i5-13500HX] Real Life CPU
 
@@ -185,26 +226,31 @@ Now that the physical registers and the TSS / Banked Register mechanisms are cle
   - 6P-cores: ✅ Hyper-Threading,1 physical P-core = 2 Architectural Threads (Logical Processors).
   - 8E-Cores: ⛔ NO Hyper-Threading.
 
-#### The Golden Rule of OS Dev:
+#### The Golden Rule of OS Dev:  ✅ 
   - To the OS => =="Thread" (Logical Processor) is the actual CPU==
   - single [THREADS] is an independent processor. 
-  - Therefore, [ Each THREAD ] has its ==own private set of architectural registers. **TR** (Task Reg) ==
-  - Thread 0 and Thread 1 (sharing P-core 1) each have their own unique RIP, RSP, CS, and TR registers.
-• Because each thread has its own TR register, every single thread has its own separate TSS structure allocated in RAM by the OS. When Thread 0 handles an interrupt, it uses its own RSP0 pointer; when Thread 1 handles an interrupt, it uses a completely different RSP0.
+  - Therefore, [Each THREAD] has its ==own private set of architectural registers. **TR** (Task Reg) ==
+  - have their own unique 
+    + RIP
+    + RSP 
+    + CS
+    + TR 
+  - each thread -> own TR register,
+  - every single thread -> own separate TSS 
+  - When Thread 0 handles an interrupt -> ==it uses its own RSP0 pointer==
+  - when Thread 1 handles an interrupt -> ==it uses a completely different RSP0==
 
 3. Hardware Layout Diagram
-
-This diagram maps out how components are split between the physical CPU package, a Performance Core, and its two independent Hyper-Threads, showing exactly what is private vs. shared.
 ```text
  ┌─────────────────────────────────────────────────────────────────────────────────┐
  │               INTEL CORE i5-13500HX PROCESSOR (DIE / PACKAGE)                   │
  │                                                                                 │
- │  ┌──────────────────────────────────────────────────────────┐                   │
- │  │ UNCORE / SYSTEM AGENT (PCIe 5.0, Memory Controller)      │                   │
- │  └──────────────────────────────────────────────────────────┘                   │
- │  ┌──────────────────────────────────────────────────────────┐                   │
- │  │ SHARED L3 CACHE (24 MB Smart Cache - Shared by all cores)│                   │
- │  └──────────────────────────────────────────────────────────┘                   │
+ │        ┌──────────────────────────────────────────────────────────┐             │
+ │        │ UNCORE / SYSTEM AGENT (PCIe 5.0, Memory Controller)      │             │
+ │        └──────────────────────────────────────────────────────────┘             │
+ │       ┌─────────────────────────────────────────────────────────────┐           │
+ │       │ SHARED L3 CACHE (24 MB Smart Cache - Shared by all 20 cores)│           │
+ │       └─────────────────────────────────────────────────────────────┘           │
  │                                                                                 │
  │  ┌───────────────────────────────────────────────────────────────────────────┐  │
  │  │               PHYSICAL PERFORMANCE CORE (P-CORE)                          │  │
@@ -247,11 +293,142 @@ This diagram maps out how components are split between the physical CPU package,
  └─────────────────────────────────────────────────────────────────────────────────┘
 Use code with caution.
 ```
+
+
+
+
 Components Decoded for OSTEP:
 
-1. The Registers (RIP, RSP, CS): These dictate the absolute local state of execution. When an OS performs a Context Switch (a major topic in OSTEP Chapter 4/5), it saves these registers from the CPU into a process structure and loads a new process's values into them.
-2. The Task Register (TR): Tells the hardware thread where its corresponding metadata sheet (TSS) is located in RAM.
-3. L1 and L2 Caching: Private or semi-private fast storage. OSTEP will discuss concurrency and cache-coherence issues later; notice how Thread 0 and Thread 1 share execution units but have isolated states.
-Since you are studying OSTEP, would you like to map out exactly what happens to these registers (RIP, RSP, TR) during a Kernel Traps / System Call transition?
+ 1. The Registers (RIP, RSP, CS):
+   - Dictate the absolute local state of execution.
+   - When an OS performs a Context Switch (a major topic in OSTEP Chapter 4/5),
+   - it saves these registers from the CPU into a process structure 
+   - loads a new process's values into them.
 
+ 2. The Task Register (TR):
+   - Tells HW thread: where corresponding MetadataSheet(TSS) is. 
+ 3. L1 and L2 Caching: 
+   - Private or semi-private fast storage.
+   - OSTEP will discuss concurrency and cache-coherence issues later; notice how Thread 0 and Thread 1 share execution units but have isolated states.
+
+
+
+
+
+
+
+
+
+
+
+
+---
+
+
+# Uncore / System Agent / Memory Controller
+
+> OLD: Components like
+  - memory controller (RAM) 
+  - PCIe controller (GPU/SSD) 
+  - OUTSIDE CPU separate MOBO chip=> [Northbridge]
+
+> TODAY:
+  - [EVERYTHING EVERYWHERE ALL AT ONCE]: == UNICORE or System Agent ==
+  - Uncore: 
+    + collective name for all the
+    + parts of the CPU silicon 
+    + that are not part of the core execution units.
+  > JOB: CENTRAL TRAFFIC COP 
+   + routing data between your 14 cores
+   + the L3 cache 
+   + the integrated GPU
+   + your PCIe lanes
+   + system RAM through the built-in Memory Controller.
+
+# E-Core L2 Cache Layout
+
+  - E-cores => DIFFERENTLY  
+    - P-cores -> large and independent,
+    - P-core -> own dedicated 1.25 MB L2 cache.
+
+ |[P-CORE]|[E-CORE]|
+ | - | - |
+ |Large|Much Smaller|
+ |Indipendent|Clustered of [4]|
+ | 6 P cores | [4X2 Cluster] of E-Core|
+ | Seperate L2/P-core ==1.25mb== | Seperate L2/Cluster ==2-4mb== |
+
+ - E-cores are physically much smaller
+ - 8 E-cores are split into two clusters of 4. 
+ - CLUSTER => single, unified L2 cache ( 2MB-4MB) for 4 E-cores. 
+ - ⛔ NO Hyper-Threading on E-cores, so 1 E-core = 1 Thread.
+
+# Execution Engine [EE]
+ - Execution Engine =>  physical math and logic factory of the core
+ - CPU decodes Instruction: eax, ebx, the 
+ - sends to EE 
+ - EE It contains:
+   + ALUs (Arithmetic Logic Units): For integer math (+, -, AND, OR).
+   + FPUs / Vector Units (AVX): For floating-point math and complex multi-data matrix operations.
+   + AGUs (Address Generation Units): Specialized calculators that only figure out memory addresses.
+
+# The Main Registers Explained
+
+• RIP (Register Instruction Pointer): This is the Program Counter. It holds the memory address of the very next machine code instruction the CPU thread needs to execute.
+• RSP (Register Stack Pointer): Points to the top of the current application or kernel stack in memory. It changes every time you call a function (PUSH, POP, CALL, RET).
+• CS (Code Segment): As we discussed, this tracks the current privilege ring (Ring 0 vs Ring 3) in its lowest two bits.
+• TR (Task Register): Holds a pointer to the current thread's TSS structure in RAM.
+
+## Part 2: What is an NMI Stack & The IST1-7 List?
+
+> [IST1]: NMI (Non-Maskable Interrupt)
+  - cannot be ignored or disabled by OS (unlike regular,OS can temp mute CLI instructions).
+  - [HIGH-PRIORITY HARDWARE EMERGENCY ] alert deu to [catastrophic hardware events].
+    + RAM-stick detecting uncorrectable data corruption
+    + MOBO overheating.
+  - can strike at any microsecond
+  - even while the kernel is modifying critical stack 
+  - Kernel cannot risk using the active stack. 
+  - Therefore -> uses a dedicated emergency stack pointer called [IST1].
+
+####  The IST1–7 Mapping in Modern OSes (like Linux)
+
+The x86-64 hardware leaves the 7 slots open for the OS to define. Linux configures them as follows:
+• IST1 (NMI Stack): Used for handling Non-Maskable Interrupts safely.
+• IST2 (Double Fault Stack): Used when the CPU crashes while attempting to handle a previous crash. This emergency stack prevents a hardware hard-reboot (Triple Fault).
+• IST3 (Machine Check Stack): Used for severe internal CPU or memory hardware errors.
+• IST4 (Debug Stack): Used by kernel debuggers to set hardware breakpoints without interfering with normal code execution.
+• IST5 (MCE Safe Recovery Stack): Used in newer kernels to safely recover from specific memory errors.
+• IST6 & IST7: Kept reserved or unassigned for future architecture extensions.
+
+Part 3: ARM64 Mechanism vs. x86_64 (Banked Registers & Hardware Wiring)
+
+Let's look at a famous ARM64 CPU: Apple's M-series or a flagship Qualcomm Snapdragon.
+ARM64 handles privilege traps completely differently—and much faster—than x86-64. Instead of relying on a complex software structure in RAM (the TSS), ARM64 builds the solution entirely into the hardware copper wires via Banked Registers.
+
+What are Banked Registers?
+
+In silicon, a register is just a tiny cluster of transistors. In ARM64, the Stack Pointer (SP) register is physically duplicated inside the chip. You don't just have one SP; you have:
+• SP_EL0 (Stack Pointer for Exception Level 0 - User Mode)
+• SP_EL1 (Stack Pointer for Exception Level 1 - Kernel Mode)
+
+How the "CPU Wiring" removes Copying/Moving
+
+In x86, when an interrupt happens, the CPU has to read RAM, find the TSS, read the RSP0 value, and copy it into the RSP register. This takes time.
+In ARM64, when an app running at EL0 triggers a system call or interrupt, the hardware instantly elevates to EL1. Physically, an internal transistor switch flips.
+The assembly code instruction MOV x1, SP doesn't change, but the physical copper wire lines inside the CPU are disconnected from the SP_EL0 transistor bank and instantly routed to the SP_EL1 transistor bank instead.
+No data was read from RAM, and no values were copied or moved. The CPU simply changed which physical pool of hardware storage the name SP points to. This makes context transitions in ARM64 incredibly efficient.
+
+Part 4: Can Regular Users Modify These Registers?
+
+No, and this is the entire foundation of Operating System security (OSTEP Chapter 4: Limited Direct Execution).
+If a normal user application could write directly to CS or TR, it could simply execute MOV CS, 0 to elevate itself to Ring 0 and completely take over or wipe the machine.
+
+The Hardware Wall
+
+The CPU hardware enforces strict rules based on the current mode:
+1. Instructions: Certain assembly instructions are explicitly flagged as Privileged Instructions (e.g., LTR to load the Task Register, or wrmsr to write model-specific registers). If the CPU sees these instructions while the lowest 2 bits of CS are 11 (Ring 3), the CPU refuses to run them and triggers a General Protection Fault (#GP), killing your application instantly.
+2. C-Pointers vs. Registers: When you write code in C or C++, pointers allow you to read and write to addresses in RAM. You cannot create a C-pointer that points to a hardware register because registers do not have memory addresses; they live inside the processor core.
+To manipulate registers, low-level programmers use inline assembly (like asm volatile ("..." : : );). Even then, you can only modify general-purpose registers (like RAX, RBX). The critical control registers (CS, TR, CR3) can only be modified by the Operating System kernel running in Ring 0 / EL1.
+Now that you see how the hardware blocks user apps from changing these registers, would you like to explore how OSTEP's concept of Limited Direct Execution (LDE) uses the syscall instruction to safely cross this boundary?
 
