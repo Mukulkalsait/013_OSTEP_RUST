@@ -153,14 +153,15 @@ fn sys_call_fork(){
 |RSP1 / RSP2|TSS|Privilege elevation to Ring 1 / Ring 2|Unused by modern OSes|
 | IST1 – IST7|TSS-IST)| BluePrint=[IDT](Interrupt Descriptor Table) |Emergency handlers (Double Faults, NMI, Kernel Debugging) |
   > - [ALL 7 ISTS]: Usage:
-     🔴 IST1:(NMI Stack) -> Non Maksable Intrupts Safety -> Points Emergency Stack -> Used at Catastrophic HW Events.
-     ⚫ IST2:(Double Fault Stack:to Stop Tripple Crash) -> if 
-          if CPU Crash := Handeler => Handeling time Crash := (imposible to handle so) -> another EMERGENCY STACK to REBOOT.
-     🟡 IST3:(Machine Check Stack) -> Severlal (Cpu & Memory) HW errors.
-     🟢 IST4:(Debug Stack) -> Used for Kernal Debuging -> HW breakpoints settings without interfering Normal Codes.
-     🔵 IST5:(MCE Safe Recovery Stack) -> NEW Kernals: Specific MEM-Errors Safe Recovery.
-     🟣 IST6 & IST7 => RESERVED FOR FUTURE extensions. 
-
+  ```text 
+  🔴 IST1:(NMI Stack) -> Non Maksable Intrupts Safety -> Points Emergency Stack -> Used at Catastrophic HW Events.
+  ⚫ IST2:(Double Fault Stack:to Stop Tripple Crash) -> if 
+      if CPU Crash := Handeler => Handeling time Crash := (imposible to handle so) -> another EMERGENCY STACK to REBOOT.
+  🟡 IST3:(Machine Check Stack) -> Severlal (Cpu & Memory) HW errors.
+  🟢 IST4:(Debug Stack) -> Used for Kernal Debuging -> HW breakpoints settings without interfering Normal Codes.
+  🔵 IST5:(MCE Safe Recovery Stack) -> NEW Kernals: Specific MEM-Errors Safe Recovery.
+  🟣 IST6 & IST7 => RESERVED FOR FUTURE extensions. 
+  ```
 ##### [TR] Task Register: INCREDIBLY FAST  (Transistor.) -> 64bit data/per.
 ##### At Trap -> CPU read -> TR Values: 
   - Example: 
