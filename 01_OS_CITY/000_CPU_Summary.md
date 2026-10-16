@@ -363,8 +363,18 @@ if TRAP::SUCCESS {
    - RDMSR : READ_MSR ->  Read  data of [index in ECX] into EDX:EAX 
    - WRMSR : WRITE_MSR => Write data into [index in ECX] from EDX:EAX 
  
-> 
+> Intel => SYSENTER | AMD => SYSCALL 
+  - Completely bypass IDT lookup
+  - Checks MSRs at Boot -> OS kernel writes -> ConfigData -> Speicific MSR_Addr.
+```text 
 
+🚓 IA32_STAR           -> 0xC000,0081-> TargetCodeSeg->CS & StackSeg->SS Selector => Instant overwrite CS reg -> Previlige UP |
+🚀 IA32_LSTAR          -> 0xC000,0082-> KernalSYS CALL Entrypoint Addr => its value copied into RIP directly -> DONE |
+x -----------          -> 0xC000,0083-> ------
+🚩 IA32_FMASK          -> 0xC000,0084-> SYS FLAG🚩 Mask-> AutoClear Certain Bits in R-Flags reg, during Transition. |
+  IA32_KernEL_GS_BASE -> 0xC000,0102-> Active Thread's Kernal Stack => Finding Kernal Core Data |
+
+```
 
 
 

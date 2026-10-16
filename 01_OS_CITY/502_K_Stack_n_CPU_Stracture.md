@@ -551,3 +551,5 @@ Key Takeaways for OSTEP Chapter 4 & 5 (Context Switching):
 • In x86_64: When switching tasks, the OS kernel must continuously update the RSP0 field inside the RAM-based TSS structure for every thread so that the next interrupt hits the correct kernel stack.
 • In ARM64: The OS kernel simply executes a standard processor instruction to overwrite the physical SP_EL1 register on the CPU itself when shifting between execution threads.
 Would you like to trace how OSTEP's Context Switch routine saves these distinct registers (RSP vs SP_EL0/1) to a process's Thread Control Block (TCB) when pausing one program to run another?
+
+

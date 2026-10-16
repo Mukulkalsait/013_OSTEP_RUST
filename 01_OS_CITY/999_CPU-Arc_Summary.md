@@ -82,6 +82,47 @@
       - In ARM64: NO-TSS -> 💚 [SP_EL1] register directly inside the CPU silicon.
       - modern x86_64 => caching mechanisms => L1 /dedicated internal reg-> [Rare Boundry Cross happens]
 
+
+### Part 2: Model-Specific Registers (MSRs) in Deep Detail
+
+> Your realization is spot on. 
+  - ARM64 -> clean, dedicated registers like CPSR and SP_EL1 in silicon architecture from day one
+  - x86 ->  40 years evolved -> Modernisation without breaking old code -> Intel/AMD introduced MSRs.
+
+> What is an MSR?
+  - highly specialized control register
+  - built into the CPU silicon 
+  - that handles [SYS_CONFIG], [performance monitoring], and [debugging] features.
+ > Unlike general-purpose reg (RAX, RBX) or standard segment selectors (CS),
+  - MSRs do not have names in assembly.
+  - each MSR has a unique 32-bit Address Index Number.
+  - can only be accessed using [two highly privileged instructions] that [only work in Ring 0] -> ==Kernel Mode==:
+    + RDMSR (Read_MSR): Loads the contents of the MSR specified by the index in ECX into registers EDX:EAX.
+    + WRMSR (Write_MSR): Writes the contents of EDX:EAX into the MSR specified by the index in ECX.
+
+> How x86 Uses MSRs to Standardize Kernel Transitions
+  - To fix SLOW speed of TSS reading.
+  - x86 Added SYSCALL (AMD) and SYSENTER (Intel) instructions. 
+    - These bypass the IDT completely. 
+    - But how does the hardware instantly know where the kernel code is if it doesn't look at the IDT?
+      -> It checks the MSRs.
+      -> During system boot, 
+      -> OS kernel writes its config data directly into specific MSR addr.
+
+|MSR Name|Index (Hex)|What the Kernel Stores Inside It|What the CPU uses it for during SYSCALL| 
+| - | - | - | - |
+| IA32_LSTAR|xC0000082| MemAddr of Kernel's Sys Call Entry Point.| SYS_CALL->CPU copy MSR's value direct to RIP->Now CPU running kernel. |
+| IA32_STAR|0xC0000081|TargetCodeSeg(CS)& StackSeg(SS) selectors.| CPU uses to instantly overwrite CS register to change privilege level bits to 00 (Ring 0).|
+| IA32_FMASK|0xC0000084|System Flag Mask.|AutomClears certain bits in R-FLAGS register (eg disabling interrupts) during the transition.|
+| IA32_KERNEL_GS_BASE|0xC0000102|Points active thread's kernel structure.|At transitioning, SWAPGS instruction flips this MSR with active GS base so kernel can find core data instantly.|
+
+
+  > Why they are called "Model-Specific"
+  - When Intel originally introduced them in the Pentium processor, these registers were only meant to be used for tuning specific models of chips (e.g., controlling a specific cooling sensor or performance counter on a Pentium vs. a Pentium Pro).
+However, features like 64-bit mode execution, virtualization (VT-x/AMD-V), and fast system calls (SYSCALL) became so vital that a large group of these registers were locked down and made mandatory across all modern x86-64 chips. They retain the "Model-Specific" name for historical compatibility, but they act as the definitive modern Control and Status Registers for x86.
+Would you like to analyze an assembly code block showing how a kernel configures the IA32_LSTAR register using WRMSR during the OS boot phase?
+
+
 ## 5. Control Registers (CR0, CR3, CR4 in x86)
 Apart from regular data registers (RAX, RBX), the processor has physical control registers that dictate how the hardware behaves.
 
@@ -97,81 +138,6 @@ Apart from regular data registers (RAX, RBX), the processor has physical control
 ```rust
 /// IMP: CR3 -> Context Switching COmponent
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
----
-
-
-Part 2: Model-Specific Registers (MSRs) in Deep Detail
-
-Your realization is spot on. While ARM64 built clean, dedicated registers like CPSR and SP_EL1 cleanly into the silicon architecture from day one, x86 evolved incrementally over 40 years. To handle modern control requirements without completely breaking old code or running out of names for new registers, Intel and AMD introduced MSRs (Model-Specific Registers).
-
-What is an MSR?
-
-An MSR is a highly specialized control register built into the CPU silicon that handles system configuration, performance monitoring, and debugging features.
-Unlike general-purpose registers (RAX, RBX) or standard segment selectors (CS), MSRs do not have names in assembly. Instead, every MSR has a unique 32-bit Address Index Number. They can only be accessed using two highly privileged instructions that only work in Ring 0:
-• RDMSR (Read Model-Specific Register): Loads the contents of the MSR specified by the index in ECX into registers EDX:EAX.
-• WRMSR (Write Model-Specific Register): Writes the contents of EDX:EAX into the MSR specified by the index in ECX.
-
-How x86 Uses MSRs to Standardize Kernel Transitions
-
-In early x86 processors, a system call required going through the Interrupt Descriptor Table (IDT), which meant checking memory, descriptors, and pushing values to the stack. This was painfully slow.
-To fix this, modern x86 chips introduced the SYSCALL (AMD) and SYSENTER (Intel) instructions. These bypass the IDT completely. But how does the hardware instantly know where the kernel code is if it doesn't look at the IDT? It checks the MSRs.
-During system boot, the operating system kernel writes its configuration data directly into specific MSR addresses:
-
-MSR Name	Index (Hex)	What the Kernel Stores Inside It	What the CPU uses it for during SYSCALL
-IA32_LSTAR	0xC0000082	The exact memory address of the Kernel's System Call Entry Point.	When an app runs SYSCALL, the CPU copies this MSR's value directly into RIP. The CPU is now running the kernel.
-IA32_STAR	0xC0000081	Target Code Segment (CS) and Stack Segment (SS) selectors.	The CPU uses this to instantly overwrite the CS register to change the privilege level bits to 00 (Ring 0).
-IA32_FMASK	0xC0000084	System Flag Mask.	Automatically clears certain bits in the RFLAGS register (like disabling interrupts) during the transition.
-IA32_KERNEL_GS_BASE	0xC0000102	Pointer to the active thread's kernel structure.	When transitioning, the SWAPGS instruction flips this MSR with the active GS base so the kernel can find core data instantly.
-
-
-Why they are called "Model-Specific"
-
-When Intel originally introduced them in the Pentium processor, these registers were only meant to be used for tuning specific models of chips (e.g., controlling a specific cooling sensor or performance counter on a Pentium vs. a Pentium Pro).
-However, features like 64-bit mode execution, virtualization (VT-x/AMD-V), and fast system calls (SYSCALL) became so vital that a large group of these registers were locked down and made mandatory across all modern x86-64 chips. They retain the "Model-Specific" name for historical compatibility, but they act as the definitive modern Control and Status Registers for x86.
-Would you like to analyze an assembly code block showing how a kernel configures the IA32_LSTAR register using WRMSR during the OS boot phase?
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ---
 # Visualising the Stack and the RSP Register
