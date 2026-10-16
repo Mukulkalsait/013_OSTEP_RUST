@@ -345,6 +345,8 @@ if TRAP::SUCCESS {
   - Returning
     - Sys-Ret => Current RSP (1) => TTS 
     - RSP3 -> Set RSP->0 [CPL Flip]
+
+## [ CPSR-CurrentProgramStateReg] in ARM64 no TSS noting just CPSR + banked registors + flippers.
 >> ARM64: 
   + SysCall => CPSR-CurrentProgramStateReg 
     - SP_EL0 Flip SP_EL1 
@@ -353,6 +355,15 @@ if TRAP::SUCCESS {
   - Sys-Ret => CPSR -> SP_EL [FLIP].
 
 
+## MSRs -> Udate over IDTR.
+
+ - Specialised + CPU Build (banked) for. => SYS-Config + Performance Monitor + debuging.
+ - NO NAMING -> 32bit - index number addr.
+ - ONLY WORK WITH -> Ring 0 HighPreveliged Instructions
+   - RDMSR : READ_MSR ->  Read  data of [index in ECX] into EDX:EAX 
+   - WRMSR : WRITE_MSR => Write data into [index in ECX] from EDX:EAX 
+ 
+> 
 
 
 
